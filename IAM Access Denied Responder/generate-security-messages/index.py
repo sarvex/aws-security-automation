@@ -162,19 +162,18 @@ def publish_iam_user_history(event, context):
 def getIPGeoDetails(sourceIPAddress):
   try:
     api_key = os.environ['APIKey']
-    url = 'https://geoipify.whoisxmlapi.com/api/v1?apiKey=' + api_key + '&ipAddress=' + sourceIPAddress
+    url = f'https://geoipify.whoisxmlapi.com/api/v1?apiKey={api_key}&ipAddress={sourceIPAddress}'
     ip_geo_data = (urllib.urlopen(url).read().decode('utf8'))
     ip_geo_data = json.loads(ip_geo_data)
     return ip_geo_data
   except:
     ip_geo_data = {}
-    ip_geo_data = json.dumps(ip_geo_data)
-    return ip_geo_data
+    return json.dumps(ip_geo_data)
 
 def getIPWhoisDetails(sourceIPAddress):
   try:
     api_key = os.environ['APIKey']
-    url = 'https://www.whoisxmlapi.com/whoisserver/WhoisService?outputFormat=JSON&apiKey=' + api_key + '&domainName=' + sourceIPAddress
+    url = f'https://www.whoisxmlapi.com/whoisserver/WhoisService?outputFormat=JSON&apiKey={api_key}&domainName={sourceIPAddress}'
     logger.info(url)
     ip_whois_data = (urllib.urlopen(url).read().decode('utf8'))
     ip_whois_data = json.loads(ip_whois_data)
@@ -182,5 +181,4 @@ def getIPWhoisDetails(sourceIPAddress):
   except:
     logger.error()
     ip_whois_data = {}
-    ip_whois_data = json.dumps(ip_whois_data)
-    return ip_whois_data
+    return json.dumps(ip_whois_data)

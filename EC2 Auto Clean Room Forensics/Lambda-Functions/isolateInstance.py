@@ -48,10 +48,10 @@ def lambda_handler(event, context):
             TargetGroupArn=targetGroupArn
         )
 
-        instanceIDlist = []
-        for instanceKey in targets['TargetHealthDescriptions']:
-            instanceIDlist.append(instanceKey.get('Target').get('Id'))
-
+        instanceIDlist = [
+            instanceKey.get('Target').get('Id')
+            for instanceKey in targets['TargetHealthDescriptions']
+        ]
         if instanceID in instanceIDlist:
             response = isolateInstance(instanceID, targetGroupArn)
     event['STATUS'] = response
