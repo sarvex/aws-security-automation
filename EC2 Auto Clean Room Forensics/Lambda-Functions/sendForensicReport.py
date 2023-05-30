@@ -28,7 +28,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 def lambda_handler(event, context):
     bucket = event['Records'][0]['s3']['bucket']['name']
-    key = event['Records'][0]['s3']['object']['key'] 
+    key = event['Records'][0]['s3']['object']['key']
     download_path = '/tmp/key.txt'
     response = client.get_object(
         Bucket=bucket,
@@ -38,23 +38,19 @@ def lambda_handler(event, context):
     # s3_client.download_file(bucket, key, download_path).decode('utf-8')
     # a.encode('utf-8').strip()
     content = response['Body'].read()
-    # print(content)
-    array = []
     linearray = content.splitlines()
-    # print (linearray)
-    for s in linearray:
-        # print (s)
-        
-        if "d/r *" in str(s):
-            # print (s)
-            array.append('"' + str(s) + '"')
-    
-    print (array)   
+    array = [f'"{str(s)}"' for s in linearray if "d/r *" in str(s)]
+    print (array)
     # json_message = json.loads(json.loads(event['Records'][0]['Sns']['Message'])['TextMessage'])
     instanceList = key.replace('incident-response/file-deleted-', '').replace(".txt", "");
     print (instanceList)
     instanceArray = instanceList.split("-i-")
-    slack_message_text = formatMyMessage("i-" + instanceArray[1],instanceArray[0], array, "s3://" + bucket + "/" + key)
+    slack_message_text = formatMyMessage(
+        f"i-{instanceArray[1]}",
+        instanceArray[0],
+        array,
+        f"s3://{bucket}/{key}",
+    )
     # Sends the message to Slack
     response = requests.post(HOOK_URL, data=json.dumps(slack_message_text), headers={'Content-Type': 'application/json'})
     logging.info("Response Status Code: ")
@@ -63,20 +59,26 @@ def lambda_handler(event, context):
 
 def formatMyMessage(victimInstanceID, instanceID, deletedLines, s3location):
     
-    slack_message = {
+    return {
         "attachments": [
             {
                 "fallback": "Required plain-text summary of the attachment.",
                 "color": "#b7121a",
-                "title": "Results for instance " +  victimInstanceID + " being investigated for deleted files\n " +" \n For more information login to forensics instance : " +  instanceID + " \n AWS Account: " + "469306637372" + " \n S3 Location: " + s3location ,
+                "title": f"Results for instance {victimInstanceID}"
+                + " being investigated for deleted files\n "
+                + " \n For more information login to forensics instance : "
+                + instanceID
+                + " \n AWS Account: "
+                + "469306637372"
+                + " \n S3 Location: "
+                + s3location,
                 "text": "",
-                "fields":[{
-                        "value": "Details: " + '\n '.join(deletedLines)
-                    },
+                "fields": [
+                    {"value": "Details: " + '\n '.join(deletedLines)},
                     {
-                        "value": "For More details Login to the instance: " + instanceID
-                    }]
+                        "value": f"For More details Login to the instance: {instanceID}"
+                    },
+                ],
             }
         ]
     }
-    return slack_message

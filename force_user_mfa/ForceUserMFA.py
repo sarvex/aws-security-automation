@@ -77,20 +77,17 @@ def lambda_handler(event, context):
                 if deleteOnFail is True:
                     deleteUser(logdata['newUserName'], logdata['serialNumber'])
                     print("Token creation failed, aborting.\nUser " + logdata['newUserName'] + " deleted.")
-                    sys.exit()
                 else:
                     print("Token creation failed, aborting.\nUser " + logdata['newUserName'] + " not deleted.")
-                    sys.exit()
+                sys.exit()
         print("Seed created")
     else:
         if deleteOnFail is True:
             deleteUser(logdata['newUserName'], logdata['serialNumber'])
             print("Token creation failed, aborting.\nUser " + logdata['newUserName'] + " deleted.")
-            sys.exit()
         else:
             print("Token creation failed, aborting.\nUser " + logdata['newUserName'] + " not deleted.")
-            sys.exit()
-
+        sys.exit()
     # Encrypt the seed using aKMS CMK alias MFAUser.
     encryptedSeed = encrypt_string(mfa['VirtualMFADevice']['Base32StringSeed'])
 
@@ -141,8 +138,18 @@ def create_log_data(event):
     newUserName = event['detail']['responseElements']['user']['userName']
     newUserArn = event['detail']['responseElements']['user']['arn']
     logData = {}
-    logData = {'userName': userName, 'userArn': userArn, 'accessKeyId': accessKeyId, 'region': region, 'account': account, 'eventTime': eventTime, 'userAgent': userAgent, 'sourceIP': sourceIP, 'newUserName': newUserName, 'newUserArn': newUserArn}
-    return logData
+    return {
+        'userName': userName,
+        'userArn': userArn,
+        'accessKeyId': accessKeyId,
+        'region': region,
+        'account': account,
+        'eventTime': eventTime,
+        'userAgent': userAgent,
+        'sourceIP': sourceIP,
+        'newUserName': newUserName,
+        'newUserArn': newUserArn,
+    }
 
 
 def mfa_store_policy(user, region, account):
@@ -150,9 +157,8 @@ def mfa_store_policy(user, region, account):
     try:
         IAM_CLIENT.attach_user_policy(
             UserName=user,
-            PolicyArn='arn:aws:iam::' + account + ':policy/user_mfa_access'
+            PolicyArn=f'arn:aws:iam::{account}:policy/user_mfa_access',
         )
-    # If failed we need to create the policy and attach the new one
     except:
         KMS_CLIENT = boto3.client('kms')
         response = KMS_CLIENT.describe_key(
@@ -164,19 +170,16 @@ def mfa_store_policy(user, region, account):
             "Statement": [
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "ssm:GetParameters"
-                    ],
-                    "Resource": "arn:aws:ssm:" + region + ":" + account + ":parameter/mfa-${aws:username}"
+                    "Action": ["ssm:GetParameters"],
+                    "Resource": f"arn:aws:ssm:{region}:{account}"
+                    + ":parameter/mfa-${aws:username}",
                 },
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "kms:Decrypt"
-                    ],
-                    "Resource": keyArn
-                }
-            ]
+                    "Action": ["kms:Decrypt"],
+                    "Resource": keyArn,
+                },
+            ],
         }
         response = IAM_CLIENT.create_policy(
             PolicyName='user_mfa_access',
@@ -185,7 +188,7 @@ def mfa_store_policy(user, region, account):
         )
         IAM_CLIENT.attach_user_policy(
             UserName=user,
-            PolicyArn='arn:aws:iam::' + account + ':policy/user_mfa_access'
+            PolicyArn=f'arn:aws:iam::{account}:policy/user_mfa_access',
         )
     return 0
 
@@ -199,12 +202,12 @@ def store_mfa(user, seed, region, account):
     keyArn = response['KeyMetadata']['Arn']
     try:
         response = SSM_CLIENT.put_parameter(
-            Name='mfa-' + user,
+            Name=f'mfa-{user}',
             Description='MFA token seed',
             Value=seed,
             Type='SecureString',
             KeyId=keyArn,
-            Overwrite=True
+            Overwrite=True,
         )
         mfa_store_policy(user, region, account)
         print("Token stored in Parameter Store")
@@ -225,10 +228,10 @@ def create_virtual_mfa(newUserName, newUserArn):
         TYPE: Description
     """
     print("Creating virtual MFA token")
-    deviceName = newUserName + '-MFA'
+    deviceName = f'{newUserName}-MFA'
     # Try to delete token first to avoid conflict/stale tokens
     try:
-        deviceArn = newUserArn + '-MFA'
+        deviceArn = f'{newUserArn}-MFA'
         response = IAM_CLIENT.delete_virtual_mfa_device(
             SerialNumber=deviceArn
         )
@@ -246,10 +249,7 @@ def create_virtual_mfa(newUserName, newUserArn):
         except:
             time.sleep(tries + 1)
             response = str(sys.exc_info()[0])
-    if "SerialNumber" in str(response):
-        return response
-    else:
-        return "FailedToCreateToken"
+    return response if "SerialNumber" in str(response) else "FailedToCreateToken"
 
 
 def deleteUser(userName, SN):
@@ -274,7 +274,7 @@ def deleteUser(userName, SN):
         )
         print("User deleted")
     except:
-        print("Unable to delete user: " + userName)
+        print(f"Unable to delete user: {userName}")
     return True
 
 
@@ -301,7 +301,7 @@ def enable_mfa(userName, mfaArn, seed):
             fail = True
             break
     if fail:
-        print("Token1 creation failed. Token1 = " + str(token1))
+        print(f"Token1 creation failed. Token1 = {str(token1)}")
         return "token1 fail"
 
     # Get token 2
@@ -317,7 +317,7 @@ def enable_mfa(userName, mfaArn, seed):
             fail = True
             break
     if fail:
-        print("Token2 creation failed. Token1 = " + str(token2))
+        print(f"Token2 creation failed. Token1 = {str(token2)}")
         return "token2 fail"
     print("Token enabled")
 
@@ -331,12 +331,12 @@ def enable_mfa(userName, mfaArn, seed):
         )
     except:
         response = str(sys.exc_info()[0])
-        print("Attach to user failed for user: " + userName)
+        print(f"Attach to user failed for user: {userName}")
         print("Will try 10 times")
         print(response)
     else:
         response = "Success"
-        print("Token assigned to user: " + userName)
+        print(f"Token assigned to user: {userName}")
     return response
 
 
@@ -377,10 +377,10 @@ def generate_token(seed):
                 time.time() // 30)),
         hashlib.sha1).digest()
     hashOffset = ord(hmacHash[19]) & 0xf
-    token = (struct.unpack(
-        ">I",
-        hmacHash[hashOffset:hashOffset + 4])[0] & 0x7fffffff) % 10 ** 6
-    return token
+    return (
+        struct.unpack(">I", hmacHash[hashOffset : hashOffset + 4])[0]
+        & 0x7FFFFFFF
+    ) % 10**6
 
 
 def check_approved(userName, userArn):
@@ -396,16 +396,7 @@ def check_approved(userName, userArn):
     # Default
     approved = False
 
-    # Connect change record DDB
-
-    # Check if approved for adding users
-
-    # Check how many users added
-
-    # Determine if account should be locked
-
-    approved = True
-    return approved
+    return True
 
 
 def encrypt_string(value):
@@ -439,11 +430,7 @@ def send_seed(encryptedSeed):
     Returns:
         TYPE: Description
     """
-    # Send to DDB or alternative recipient using for example SNS.
-    # Note that sending over unecnrypted protocols/methods is not recomended.
-    # This script also uses Parameter Store for per user access
-    result = "Using DDB and Parameter Store"
-    return result
+    return "Using DDB and Parameter Store"
 
 
 def log_event(logData):

@@ -160,9 +160,7 @@ def forensic(data, table):
         )
         try:
             if response['Item']:
-                # If not first time, trigger countermeasures.
-                result = disableAccount(data['userName'])
-                return result
+                return disableAccount(data['userName'])
         except:
             # First time incident, let it pass.
             return "NoRemediationNeeded"
